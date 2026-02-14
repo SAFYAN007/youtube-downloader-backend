@@ -6,25 +6,73 @@ Requires: Flask, yt-dlp, flask-cors
 
 
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 import os
+import requests
 
 app = Flask(__name__)
 
-CORS(app, resources={r"/*": {"origins": "https://hang.hangoutspk.com"}})
+# ✅ CORS (preflight/OPTIONS included)
+CORS(
+    app,
+    resources={r"/api/*": {"origins": ["https://hang.hangoutspk.com"]}},
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    expose_headers=["Content-Disposition"],
+)
 
-# 👇 YEH YAHAN ADD KARO
 @app.route("/", methods=["GET"])
 def home():
     return "Backend is running ✅"
 
+# ✅ Returns Title/Thumbnail/Channel using YouTube oEmbed (metadata only)
+@app.route("/api/info", methods=["POST", "OPTIONS"])
+def api_info():
+    if request.method == "OPTIONS":
+        return make_response("", 200)
 
-@app.route("/api/info", methods=["POST"])
-def info():
-    data = request.json
-    return jsonify({"status": "working", "data": data})
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    if not url:
+        return jsonify({"status": "error", "error": "URL is required"}), 400
 
+    try:
+        r = requests.get(
+            "https://www.youtube.com/oembed",
+            params={"url": url, "format": "json"},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return jsonify({"status": "error", "error": "Invalid YouTube URL"}), 400
+
+        j = r.json()
+        return jsonify({
+            "status": "working",
+            "data": {
+                "title": j.get("title"),
+                "thumbnail": j.get("thumbnail_url"),
+                "channel": j.get("author_name"),
+                "url": url
+            }
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+# ✅ Keeps frontend from CORS failing (OPTIONS OK), but does NOT download content
+@app.route("/api/download", methods=["POST", "OPTIONS"])
+def api_download():
+    if request.method == "OPTIONS":
+        return make_response("", 200)
+
+    return jsonify({
+        "success": False,
+        "error": "Download endpoint is disabled. Use metadata (/api/info) only."
+    }), 501
+
+@app.route("/api/health", methods=["GET"])
+def health():
+    return jsonify({"status": "healthy", "service": "Backend API"}), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
