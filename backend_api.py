@@ -4,17 +4,27 @@ Python Flask backend for downloading YouTube videos in MP4 and MP3 formats
 Requires: Flask, yt-dlp, flask-cors
 """
 
-from flask import Flask, request, jsonify, send_file
+
+
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-import yt_dlp
 import os
-import re
-from pathlib import Path
-import hashlib
-import time
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend requests
+
+CORS(app, resources={r"/*": {"origins": "https://hang.hangoutspk.com"}})
+
+@app.route("/api/info", methods=["POST"])
+def info():
+    data = request.json
+    return jsonify({"status": "working", "data": data})
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port)
+
+
+
 
 # Configuration
 DOWNLOAD_FOLDER = 'downloads'
